@@ -87,7 +87,7 @@ function createAsX(session: Session): void {
   registerSessionHandlers(session);
 
   session
-    .say({ text: 'Welcome to phone tic tac toe. You are Player X. Waiting for Player O to call in. Please hold. Press star at any time to hear the current board.' })
+    .say({ text: 'Welcome to phone tic tac toe. You are Player X. Waiting for Player O to call in. Please hold. Press star to hear the board, or press pound then a number to check a square.' })
     .gather({ input: ['digits'], numDigits: 1, timeout: LOBBY_TIMEOUT, actionHook: '/lobby' })
     .send();
 }
@@ -106,7 +106,7 @@ function joinAsO(game: Game, session: Session): void {
 
   // Player O hears the join announcement, then goes on idle hold (X moves first).
   session
-    .say({ text: 'Player O has joined. The game begins. Player X goes first. Press star at any time to hear the current board.' })
+    .say({ text: 'Player O has joined. The game begins. Player X goes first. Press star to hear the board, or press pound then a number to check a square.' })
     .pause({ length: IDLE_PAUSE })
     .send();
 
@@ -122,7 +122,7 @@ function joinAsO(game: Game, session: Session): void {
           numDigits: 1,
           timeout: MOVE_TIMEOUT,
           actionHook: '/move',
-          say: { text: 'Your opponent has joined. The game begins. You are X. Press a number, one through nine, to place your X. Press star to hear the board at any time.' },
+          say: { text: 'Your opponent has joined. The game begins. You are X. Press a number, one through nine, to place your X. Press star to hear the board, or press pound then a number to check a square.' },
         })
         .send();
     } catch (err) {
