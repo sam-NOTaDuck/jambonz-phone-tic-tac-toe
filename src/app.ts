@@ -15,7 +15,7 @@ import { createEndpoint } from '@jambonz/sdk/websocket';
 import type { Session } from '@jambonz/sdk/websocket';
 import {
   games, createGame, findWaitingGame, deleteGame,
-  checkWinner, getWinningLine, isBoardFull, boardReadout, NUMBER_WORDS, log,
+  checkWinner, getWinningLine, isBoardFull, boardReadout, occupiedReadout, squareStatus, NUMBER_WORDS, log,
   type Game, type Player,
 } from './game';
 
@@ -147,9 +147,22 @@ function rejectFull(session: Session): void {
 function handleMove(game: Game, session: Session, symbol: Player, digit: string): void {
   log(game, `move: ${digit} by ${symbol} -> board ${game.board.join('')}`);
 
-  // 0, *, # → read the board, then re-gather for the move.
-  if (digit === '0' || digit === '*' || digit === '#') {
-    queueMoveGather(session, `${boardReadout(game.board)} ${symbol}, your move. Press a number one through nine.`).reply();
+  // 0 or * → read the occupied squares only, then re-gather for the move.
+  if (digit === '0' || digit === '*') {
+    queueMoveGather(session, `${occupiedReadout(game.board)} ${symbol}, your move. Press a number one through nine.`).reply();
+    return;
+  }
+  // # → square-status query: prompt for a square, then report its state (via /query hook).
+  if (digit === '#') {
+    session
+      .gather({
+        input: ['digits'],
+        numDigits: 1,
+        timeout: MOVE_TIMEOUT,
+        actionHook: '/query',
+        say: { text: 'Press a number, one through nine, to check that square.' },
+      })
+      .reply();
     return;
   }
 
@@ -323,6 +336,51 @@ function handleMoveEvent(session: Session, evt: MoveEvent): void {
   }
 }
 
+/** Dispatch a /query actionHook event (square-status query after #). */
+function handleQueryEvent(session: Session, evt: MoveEvent): void {
+  const game = games.get(session.locals.gameId as string);
+  if (!game) {
+    session.hangup().reply();
+    return;
+  }
+  const symbol = session.locals.symbol as Player | undefined;
+  if (!symbol) {
+    session.hangup().reply();
+    return;
+  }
+
+  const reason = String(evt?.reason ?? '');
+
+  if (reason === 'dtmfDetected') {
+    const digit = String(evt?.dtmf ?? evt?.digits ?? '');
+    const n = Number(digit);
+    if (n >= 1 && n <= 9) {
+      // Report the square, then return to the move gather.
+      queueMoveGather(session, `${squareStatus(game.board, n - 1)} Your move, ${symbol}. Press a number one through nine.`).reply();
+      return;
+    }
+    // Not a valid square — re-prompt the query.
+    session
+      .gather({
+        input: ['digits'],
+        numDigits: 1,
+        timeout: MOVE_TIMEOUT,
+        actionHook: '/query',
+        say: { text: 'That is not a square. Press a number, one through nine, to check that square.' },
+      })
+      .reply();
+    return;
+  }
+
+  if (reason === 'timeout') {
+    queueMoveGather(session, `Still your turn, ${symbol}. Press a number one through nine.`).reply();
+    return;
+  }
+
+  // hangup / error / unknown — wind this leg down.
+  session.hangup().reply();
+}
+
 /** Handle a leg closing (hang-up or disconnect). */
 function handleClose(session: Session): void {
   const callSid = session.callSid;
@@ -382,6 +440,19 @@ function registerSessionHandlers(session: Session): void {
       handleMoveEvent(session, evt);
     } catch (err) {
       console.error(`[ttt] /move handler error (call ${session.callSid}):`, err);
+      try {
+        session.hangup().reply();
+      } catch {
+        /* ignore */
+      }
+    }
+  });
+
+  session.on('/query', (evt: MoveEvent) => {
+    try {
+      handleQueryEvent(session, evt);
+    } catch (err) {
+      console.error(`[ttt] /query handler error (call ${session.callSid}):`, err);
       try {
         session.hangup().reply();
       } catch {

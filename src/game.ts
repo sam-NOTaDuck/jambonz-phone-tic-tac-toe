@@ -107,6 +107,23 @@ export function boardReadout(board: Cell[]): string {
   return `The board is: ${parts.join(' ')}`;
 }
 
+/** Occupied-only readout: lists just the X/O squares, skips the empty ones. */
+export function occupiedReadout(board: Cell[]): string {
+  const parts = board
+    .map((cell, i) => (cell ? cellWord(cell, i) : null))
+    .filter((s): s is string => s !== null);
+  if (parts.length === 0) return 'The board is empty.';
+  return `The board is: ${parts.join(' ')}`;
+}
+
+/** Status of a single square for TTS, e.g. "Square five is X." or "Square five is empty." */
+export function squareStatus(board: Cell[], index: number): string {
+  const pos = NUMBER_WORDS[index];
+  const cell = board[index];
+  if (cell === '') return `Square ${pos} is empty.`;
+  return `Square ${pos} is ${cell}.`;
+}
+
 /** Log helper — every meaningful event is logged with the game id. */
 export function log(game: Game | undefined, message: string): void {
   const tag = game ? `game ${game.id.slice(0, 8)}` : 'ttt';

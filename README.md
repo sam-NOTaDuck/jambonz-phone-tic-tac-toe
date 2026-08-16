@@ -23,8 +23,13 @@ The telephone keypad maps 1:1 to the 3×3 grid:
 7 8 9
 ```
 
-"Press 5" = center square. Digits `0`, `*`, and `#` read the current board aloud
-and re-prompt for the move.
+"Press 5" = center square. Keys for board awareness:
+- `0` or `*` → **occupied squares only**: reads out the X/O squares and skips the
+  empty ones ("The board is: X in square one. O in square three."), then re-prompts
+  for the move.
+- `#` → **square-status query**: press `#` then a digit 1–9 to ask about that
+  square ("Press a number, one through nine, to check that square." →
+  "Square five is empty." / "Square five is X."), then returns to the move prompt.
 
 ## Project layout
 
@@ -107,7 +112,9 @@ with an empty reply (X was already redirected into the game).
 
 ### Move handling (`/move` actionHook)
 - `reason: 'dtmfDetected'` with the digit (read from `evt.digits`):
-  - `0` / `*` / `#` → read the full board aloud, then re-gather for the move.
+  - `0` / `*` → read the **occupied** squares aloud (skipping empties), then
+    re-gather for the move.
+  - `#` → enter **square-status query** (see `/query` below).
   - `1`–`9` on an occupied square → *"That square is taken…"* then re-gather.
   - `1`–`9` on an empty square → place the symbol, then:
     - **Win** → board readout + *"Player {X/O} wins with square one, square four,
@@ -125,7 +132,16 @@ with an empty reply (X was already redirected into the game).
 
 ### Board readout
 All nine squares, left-to-right, top-to-bottom, using spoken numbers:
-*"The board is: X in square one. Empty square two. O in square three. …"*
+*"The board is: X in square one. Empty square two. O in square three. …"* (used in
+the win/draw announcements). The mid-game `0`/`*` readout uses only the occupied
+squares: *"The board is: X in square one. O in square three."*
+
+### Square-status query (`/query` actionHook)
+Pressing `#` during your turn starts a query gather: *"Press a number, one through
+nine, to check that square."* The next digit reports just that square via
+`squareStatus()` — *"Square five is empty."* / *"Square five is X."* / *"Square
+five is O."* — then returns to the move gather. An invalid digit re-prompts the
+query; a timeout returns to the move prompt.
 
 ### Hangup handling
 On `close` of either leg: if the game is `in_progress` and the other player is
